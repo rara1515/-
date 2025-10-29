@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>テトリス - 40ラインタイムアタック (TETR.IO風)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px 0;
+            box-sizing: border-box;
+            background-color: #0D0D12;
+            color: #E0E0E0;
+        }
+        .game-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 20px;
+            padding: 20px;
+            background-color: #1A1A23;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(79, 138, 139, 0.3);
+        }
+
+        .left-panel, .right-panel {
+            width: 180px; /* パネル幅を少し広げる */
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .info-box {
+            background-color: #252530;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #353540;
+        }
+        .info-box h2 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.8em;
+            color: #A0A0B0;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+        .info-box p, .info-box .value {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #FFFFFF;
+        }
+        .info-box .sub-value {
+            font-size: 0.8em;
+            color: #B0B0C0;
+        }
+
+        #gameBoardCanvas {
+            border: 2px solid #303038;
+            background-color: #000000;
+            border-radius: 5px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .preview-canvas-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .preview-canvas {
+            background-color: #101015;
+            border-radius: 5px;
+            border: 1px solid #353540;
+            margin-top: 5px;
+        }
+        #nextPiecesContainer canvas {
+            margin-bottom: 8px;
+        }
+
+        .message-overlay {
+            position: fixed; /* 画面全体を覆うように変更 */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(13, 13, 18, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+            color: white;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .message-content {
+            font-family: 'Press Start 2P', cursive;
+        }
+        .message-content p {
+            margin: 12px 0;
+        }
+        .message-content .sub-text {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.7em;
+            color: #B0B0C0;
+        }
+        .message-content button {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #4A90E2;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 0.7em;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 15px;
+        }
+        .message-content button:hover {
+            background-color: #5AAEFF;
+        }
+        .settings-container {
+            font-family: 'Inter', sans-serif;
+            background-color: #1A1A23;
+            padding: 25px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 450px; /* 少し広げる */
+        }
+        .settings-container h2 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        .setting-item label {
+            margin-right: 15px;
+        }
+        .setting-item input[type="range"] {
+            width: 180px; /* スライダーを広げる */
+        }
+        .setting-item span {
+            width: 60px;
+            text-align: right;
+        }
+        .controls-list {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8em;
+            list-style: none;
+            padding: 0;
+            text-align: left;
+            margin: 25px auto 0;
+            max-width: 300px;
+        }
+        .controls-list li {
+            margin-bottom: 5px;
+        }
+        .controls-list strong {
+            color: #4A90E2;
+            display: inline-block;
+            width: 120px; /* ラベル幅を固定 */
+        }
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="left-panel">
+            <div class="info-box preview-canvas-container">
+                <h2>HOLD</h2>
+                <canvas id="holdPieceCanvas" class="preview-canvas"></canvas>
+            </div>
+            <div class="info-box">
+                <h2>INPUTS</h2>
+                <p id="inputsCount" class="value">0</p>
+                <p id="inputsPerPiece" class="sub-value">0.00/p</p>
+            </div>
+            <div class="info-box">
+                <h2>PIECES</h2>
+                <p id="piecesCount" class="value">0</p>
+                <p id="piecesPerSecond" class="sub-value">0.00/s</p>
+            </div>
+            <div class="info-box">
+                <h2>LINES</h2>
+                <p id="linesDisplay" class="value">0 / 40</p>
+            </div>
+            <div class="info-box">
+                <h2>TIME</h2>
+                <p id="timeDisplay" class="value">00:00.00</p>
+            </div>
+        </div>
+
+        <canvas id="gameBoardCanvas"></canvas>
+
+        <div class="right-panel">
+            <div class="info-box preview-canvas-container">
+                <h2>NEXT</h2>
+                <div id="nextPiecesContainer"></div>
+            </div>
+            <div class="info-box">
+                <h2>FINESSE</h2>
+                <p id="finesseValue" class="value">N/A</p>
+                <p id="finesseFaults" class="sub-value">0 faults</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="messageOverlay" class="message-overlay" style="display: flex;">
+        <div id="messageContent" class="message-content"></div>
+    </div>
+
+    <script>
+        // --- Game Configuration ---
+        const COLS = 10;
+        const ROWS = 20; 
+        const BLOCK_SIZE = 28; 
+        const PREVIEW_BLOCK_SIZE = 28;
+        const NUM_NEXT_PIECES = 5; 
+        const TARGET_LINES = 40;
+        const FPS = 60;
+        const FRAME_TIME = 1000 / FPS;
+
+        // --- Colors ---
+        const PALETTE = {
+            1: { base: '#00bcd4', light: '#6ff9ff', dark: '#008ba3' }, // I - Cyan
+            2: { base: '#2196f3', light: '#6ec6ff', dark: '#0069c0' }, // J - Blue
+            3: { base: '#ff9800', light: '#ffc947', dark: '#c66900' }, // L - Orange
+            4: { base: '#ffeb3b', light: '#ffff72', dark: '#c8b900' }, // O - Yellow
+            5: { base: '#4caf50', light: '#80e27e', dark: '#087f23' }, // S - Green
+            6: { base: '#9c27b0', light: '#d05ce3', dark: '#6a0080' }, // T - Purple
+            7: { base: '#f44336', light: '#ff7961', dark: '#ba000d' }  // Z - Red
+        };
+        const BOARD_BG_COLOR = '#000000';
+        const PREVIEW_BG_COLOR = '#101015';
+
+        // --- Tetrominoes ---
+        const TETROMINOES = {
+            'I': { shape: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], color: 1 },
+            'J': { shape: [[2,0,0],[2,2,2],[0,0,0]], color: 2 },
+            'L': { shape: [[0,0,3],[3,3,3],[0,0,0]], color: 3 },
+            'O': { shape: [[4,4],[4,4]], color: 4 },
+            'S': { shape: [[0,5,5],[5,5,0],[0,0,0]], color: 5 },
+            'T': { shape: [[0,6,0],[6,6,6],[0,0,0]], color: 6 },
+            'Z': { shape: [[7,7,0],[0,7,7],[0,0,0]], color: 7 }
+        };
+        
+        // --- Wall Kick Data (SRS) ---
+        const WALL_KICK_DATA_JLSTZ = [
+            [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],[[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+            [[0,0],[1,0],[1,1],[0,-2],[1,-2]],[[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+            [[0,0],[1,0],[1,-1],[0,2],[1,2]],[[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+            [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],[[0,0],[1,0],[1,-1],[0,2],[1,2]]
+        ];
+        const WALL_KICK_DATA_I = [
+            [[0,0],[-2,0],[1,0],[-2,1],[1,-2]],[[0,0],[2,0],[-1,0],[2,-1],[-1,2]],
+            [[0,0],[-1,0],[2,0],[-1,-2],[2,1]],[[0,0],[1,0],[-2,0],[1,2],[-2,-1]],
+            [[0,0],[2,0],[-1,0],[2,-1],[-1,2]],[[0,0],[-2,0],[1,0],[-2,1],[1,-2]],
+            [[0,0],[1,0],[-2,0],[1,2],[-2,-1]],[[0,0],[-1,0],[2,0],[-1,-2],[2,1]]
+        ];
+
+        // --- Game Variables ---
+        let mainCanvas, mainCtx, holdCanvas, holdCtx, nextCanvases = [], nextCtxs = [];
+        let board, currentPiece, nextPieces = [], heldPiece = null, canHold;
+        let inputsCountEl, inputsPerPieceEl, piecesCountEl, piecesPerSecondEl, linesDisplayEl, timeDisplayEl, finesseValueEl, finesseFaultsEl;
+        let messageOverlay, messageContent;
+        let linesCleared, gameRunning, gameOver, totalInputs, totalPiecesPlaced;
+        let gameLoopInterval;
+        let frameCount = 0;
+
+        // --- Replay Variables ---
+        let replayInputs = [];
+        let lastReplay = null;
+        let isReplaying = false;
+        let replayInputIndex = 0;
+        let pieceSequence = [];
+        let pieceSequenceIndex = 0;
+
+        // --- Controls (DAS/ARR) ---
+        let dasDelay = 61;
+        let arrRate = 10;
+        let dasCounter = 0;
+        let arrCounter = 0;
+        let dasFrame, arrFrame;
+        let moveDirection = 0; // -1 for left, 1 for right, 0 for none
+        let inputState = { left: false, right: false, down: false };
+
+        // --- Initialization ---
+        window.onload = () => {
+            // Canvas setup
+            mainCanvas = document.getElementById('gameBoardCanvas');
+            mainCtx = mainCanvas.getContext('2d');
+            mainCanvas.width = COLS * BLOCK_SIZE;
+            mainCanvas.height = ROWS * BLOCK_SIZE;
+
+            holdCanvas = document.getElementById('holdPieceCanvas');
+            holdCtx = holdCanvas.getContext('2d');
+            holdCanvas.width = 4.5 * PREVIEW_BLOCK_SIZE;
+            holdCanvas.height = 3 * PREVIEW_BLOCK_SIZE;
+
+            const nextPiecesContainer = document.getElementById('nextPiecesContainer');
+            for (let i = 0; i < NUM_NEXT_PIECES; i++) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 4.5 * PREVIEW_BLOCK_SIZE;
+                canvas.height = 3 * PREVIEW_BLOCK_SIZE;
+                canvas.classList.add('preview-canvas');
+                nextPiecesContainer.appendChild(canvas);
+                nextCanvases.push(canvas);
+                nextCtxs.push(canvas.getContext('2d'));
+            }
+
+            // UI Element setup
+            inputsCountEl = document.getElementById('inputsCount');
+            inputsPerPieceEl = document.getElementById('inputsPerPiece');
+            piecesCountEl = document.getElementById('piecesCount');
+            piecesPerSecondEl = document.getElementById('piecesPerSecond');
+            linesDisplayEl = document.getElementById('linesDisplay');
+            timeDisplayEl = document.getElementById('timeDisplay');
+            finesseValueEl = document.getElementById('finesseValue');
+            finesseFaultsEl = document.getElementById('finesseFaults');
+            messageOverlay = document.getElementById('messageOverlay');
+            messageContent = document.getElementById('messageContent');
+            
+            // Event Listeners
+            document.addEventListener('keydown', handleKeyPress);
+            document.addEventListener('keyup', handleKeyRelease);
+
+            // Initial state
+            showOverlay('settings');
+            board = createEmptyBoard(); 
+            draw(); 
+        };
+
+        function showOverlay(view, stats = {}) {
+            messageOverlay.style.display = 'flex';
+            let content = '';
+            const controlsHTML = `
+                <div class="controls-info" style="margin-top: 30px;">
+                    <h3 style="font-family: 'Press Start 2P', cursive; font-size: 0.7em; margin-bottom:10px;">CONTROLS</h3>
+                    <ul class="controls-list">
+                        <li><strong>&larr;/&rarr;</strong> MOVE</li>
+                        <li><strong>&uarr;</strong> ROTATE RIGHT</li>
+                        <li><strong>CTRL / Z</strong> ROTATE LEFT</li>
+                        <li><strong>&darr;</strong> SOFT DROP</li>
+                        <li><strong>W</strong> HARD DROP</li>
+                        <li><strong>E</strong> HOLD</li>
+                        <li><strong>SPACE</strong> RESTART (DURING GAME)</li>
+                    </ul>
+                </div>
+            `;
+
+            switch(view) {
+                case 'settings':
+                    content = `
+                        <div class="settings-container">
+                            <h2>SETTINGS</h2>
+                            <div class="setting-item">
+                                <label for="dasSlider">DAS (ms)</label>
+                                <input type="range" id="dasSlider" min="50" max="200" value="${dasDelay}" step="1">
+                                <span id="dasValue">${dasDelay} ms</span>
+                            </div>
+                            <div class="setting-item">
+                                <label for="arrSlider">ARR (ms)</label>
+                                <input type="range" id="arrSlider" min="1" max="100" value="${arrRate}" step="1">
+                                <span id="arrValue">${arrRate} ms</span>
+                            </div>
+                            <button id="startButton">START GAME</button>
+                            ${controlsHTML}
+                        </div>
+                    `;
+                    break;
+                case 'gameover':
+                     const resultMessage = stats.won 
+                        ? `<p>YOU WIN!</p><p class="sub-text" style="font-size:0.7em;">Final Time: ${stats.finalTime}</p>`
+                        : `<p>GAME OVER</p><p class="sub-text" style="font-size:0.7em;">Lines Cleared: ${stats.linesCleared} / ${TARGET_LINES}</p>`;
+                    content = `
+                        ${resultMessage}
+                        <button id="playAgainButton">PLAY AGAIN</button>
+                        ${lastReplay ? '<button id="replayButton">WATCH REPLAY</button>' : ''}
+                        <p class="sub-text" style="font-size:0.6em; margin-top:20px;">OR PRESS SPACE</p>
+                    `;
+                    break;
+            }
+            messageContent.innerHTML = content;
+
+            if (view === 'settings') {
+                const dasSlider = document.getElementById('dasSlider');
+                const arrSlider = document.getElementById('arrSlider');
+                const dasValue = document.getElementById('dasValue');
+                const arrValue = document.getElementById('arrValue');
+                
+                dasSlider.oninput = () => { dasValue.textContent = `${dasSlider.value} ms`; };
+                arrSlider.oninput = () => { arrValue.textContent = `${arrSlider.value} ms`; };
+                
+                document.getElementById('startButton').onclick = () => {
+                    dasDelay = parseInt(dasSlider.value, 10);
+                    arrRate = parseInt(arrSlider.value, 10);
+                    startGame(false);
+                };
+            } else if (view === 'gameover') {
+                document.getElementById('playAgainButton').onclick = () => showOverlay('settings');
+                if (lastReplay) {
+                    document.getElementById('replayButton').onclick = () => startGame(true);
+                }
+            }
+        }
+
+        function startGame(isReplay = false) {
+            if (gameLoopInterval) clearInterval(gameLoopInterval);
+            
+            isReplaying = isReplay;
+            if (isReplaying) {
+                pieceSequence = lastReplay.pieceSequence;
+                replayInputIndex = 0;
+            } else {
+                replayInputs = [];
+                pieceSequence = [];
+                const allPieceNames = Object.keys(TETROMINOES);
+                for (let i = 0; i < 50; i++) { // Generate ~350 pieces
+                    pieceSequence.push(...shuffleArray([...allPieceNames]));
+                }
+            }
+            pieceSequenceIndex = 0;
+
+            messageOverlay.style.display = 'none';
+            board = createEmptyBoard();
+            linesCleared = 0;
+            totalInputs = 0;
+            totalPiecesPlaced = 0;
+            updateStatsDisplay(); 
+
+            heldPiece = null;
+            canHold = true;
+            
+            nextPieces = [];
+            for(let i = 0; i < NUM_NEXT_PIECES + 1; i++) {
+                nextPieces.push(getNextPiece());
+            }
+            spawnNewPiece(); 
+
+            frameCount = 0;
+            dasFrame = Math.round(dasDelay / FRAME_TIME);
+            arrFrame = Math.round(arrRate / FRAME_TIME) || 1; // ARR 0 is instant, so 1 frame
+
+            gameRunning = true;
+            gameOver = false;
+            
+            gameLoopInterval = setInterval(gameLoop, FRAME_TIME);
+        }
+        
+        function getNextPiece() {
+            if (pieceSequenceIndex >= pieceSequence.length) {
+                console.error("Out of pieces!");
+                const allPieceNames = Object.keys(TETROMINOES);
+                pieceSequence.push(...shuffleArray([...allPieceNames]));
+            }
+            const pieceName = pieceSequence[pieceSequenceIndex++];
+            const pieceData = TETROMINOES[pieceName];
+            const shape = JSON.parse(JSON.stringify(pieceData.shape));
+            return { shape, originalShape: JSON.parse(JSON.stringify(shape)), color: pieceData.color, name: pieceName };
+        }
+        
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function createEmptyBoard() {
+            return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+        }
+
+        function spawnNewPiece() {
+            currentPiece = nextPieces.shift();
+            nextPieces.push(getNextPiece());
+
+            currentPiece.x = Math.floor((COLS - currentPiece.shape[0].length) / 2);
+            const firstNonEmptyRowIndex = currentPiece.shape.findIndex(row => row.some(cell => cell > 0));
+            currentPiece.y = (firstNonEmptyRowIndex !== -1) ? -firstNonEmptyRowIndex : 0;
+            currentPiece.orientation = 0;
+            
+            if (checkCollision(currentPiece.shape, currentPiece.x, currentPiece.y)) {
+                endGame(false); 
+            }
+            canHold = true;
+            drawAll();
+        }
+
+        // --- Drawing ---
+        function drawAll() {
+            draw();
+            drawNextPieces();
+            drawHoldPiece();
+        }
+
+        function draw() {
+            mainCtx.fillStyle = BOARD_BG_COLOR;
+            mainCtx.fillRect(0, 0, mainCanvas.width, mainCanvas.height);
+            drawBoard();
+            if (currentPiece && gameRunning) { 
+                drawGhostPiece(); 
+                drawPieceOnBoard(currentPiece.shape, currentPiece.x, currentPiece.y, currentPiece.color);
+            }
+        }
+
+        function drawBoard() {
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (board[y][x] > 0) {
+                        drawBlock(mainCtx, x, y, board[y][x], BLOCK_SIZE);
+                    }
+                }
+            }
+        }
+        
+        function drawGhostPiece() {
+            if (!currentPiece) return;
+            let ghostY = currentPiece.y;
+            while (!checkCollision(currentPiece.shape, currentPiece.x, ghostY + 1)) {
+                ghostY++;
+            }
+            
+            const color = PALETTE[currentPiece.color];
+            if (!color) return; 
+
+            mainCtx.strokeStyle = color.base;
+            mainCtx.lineWidth = 2;
+
+            currentPiece.shape.forEach((row, rIdx) => {
+                row.forEach((cell, cIdx) => {
+                    if (cell > 0) {
+                        if (ghostY + rIdx >= 0) { 
+                            const x = (currentPiece.x + cIdx) * BLOCK_SIZE;
+                            const y = (ghostY + rIdx) * BLOCK_SIZE;
+                            mainCtx.strokeRect(x + 1, y + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+                        }
+                    }
+                });
+            });
+        }
+
+        function drawPieceOnBoard(shape, offsetX, offsetY, colorIndex) {
+            shape.forEach((row, r) => {
+                row.forEach((cell, c) => {
+                    if (cell > 0) {
+                        if (offsetY + r >= 0) { 
+                            drawBlock(mainCtx, offsetX + c, offsetY + r, colorIndex, BLOCK_SIZE);
+                        }
+                    }
+                });
+            });
+        }
+        
+        function drawPieceInPreview(context, pieceData, blockSize) { 
+            context.clearRect(0, 0, context.canvas.width, context.canvas.height);
+            context.fillStyle = PREVIEW_BG_COLOR; 
+            context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+
+            if (!pieceData) return;
+
+            const shape = pieceData.originalShape; 
+            const colorIndex = pieceData.color;
+
+            const shapeWidth = shape[0].length;
+            const shapeHeight = shape.length;
+            const offsetX = (context.canvas.width / blockSize - shapeWidth) / 2;
+            const offsetY = (context.canvas.height / blockSize - shapeHeight) / 2;
+            
+            shape.forEach((row, r) => {
+                row.forEach((cell, c) => {
+                    if (cell > 0) {
+                        drawBlock(context, offsetX + c, offsetY + r, colorIndex, blockSize); 
+                    }
+                });
+            });
+        }
+
+        function drawBlock(ctx, x, y, colorIndex, size) {
+            const colors = PALETTE[colorIndex];
+            if (!colors) return;
+            const bx = x * size;
+            const by = y * size;
+            const inset = size * 0.1;
+
+            // Base color
+            ctx.fillStyle = colors.base;
+            ctx.fillRect(bx, by, size, size);
+
+            // Top-left highlight
+            ctx.fillStyle = colors.light;
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.lineTo(bx + size, by);
+            ctx.lineTo(bx + size - inset, by + inset);
+            ctx.lineTo(bx + inset, by + inset);
+            ctx.lineTo(bx + inset, by + size - inset);
+            ctx.lineTo(bx, by + size);
+            ctx.closePath();
+            ctx.fill();
+
+            // Bottom-right shadow
+            ctx.fillStyle = colors.dark;
+            ctx.beginPath();
+            ctx.moveTo(bx + size, by + size);
+            ctx.lineTo(bx, by + size);
+            ctx.lineTo(bx + inset, by + size - inset);
+            ctx.lineTo(bx + size - inset, by + size - inset);
+            ctx.lineTo(bx + size - inset, by + inset);
+            ctx.lineTo(bx + size, by);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+
+        function drawNextPieces() {
+            for (let i = 0; i < NUM_NEXT_PIECES; i++) {
+                if (nextCtxs[i] && nextPieces[i]) {
+                    drawPieceInPreview(nextCtxs[i], nextPieces[i], PREVIEW_BLOCK_SIZE);
+                }
+            }
+        }
+
+        function drawHoldPiece() {
+            drawPieceInPreview(holdCtx, heldPiece, PREVIEW_BLOCK_SIZE);
+        }
+
+        // --- Game Logic ---
+        function updateStatsDisplay() {
+            inputsCountEl.textContent = totalInputs;
+            inputsPerPieceEl.textContent = totalPiecesPlaced > 0 ? (totalInputs / totalPiecesPlaced).toFixed(2) + '/p' : '0.00/p';
+            piecesCountEl.textContent = totalPiecesPlaced;
+            const elapsedTimeSeconds = (frameCount * FRAME_TIME) / 1000;
+            piecesPerSecondEl.textContent = elapsedTimeSeconds > 0 ? (totalPiecesPlaced / elapsedTimeSeconds).toFixed(2) + '/s' : '0.00/s';
+            linesDisplayEl.textContent = `${linesCleared} / ${TARGET_LINES}`;
+            
+            const minutes = String(Math.floor(elapsedTimeSeconds / 60)).padStart(2, '0');
+            const seconds = String(Math.floor(elapsedTimeSeconds % 60)).padStart(2, '0');
+            const milliseconds = String(Math.floor((elapsedTimeSeconds * 100) % 100)).padStart(2, '0');
+            timeDisplayEl.textContent = `${minutes}:${seconds}.${milliseconds}`;
+        }
+        
+        function moveDown() {
+            if (!currentPiece || !gameRunning) return false;
+            if (!checkCollision(currentPiece.shape, currentPiece.x, currentPiece.y + 1)) {
+                currentPiece.y++;
+                return true;
+            } else {
+                // 衝突時も設置しない（ハードドロップのみ設置）
+                return false;
+            }
+        }
+
+        function moveLeft() {
+            if (!currentPiece || !gameRunning) return;
+            if (!checkCollision(currentPiece.shape, currentPiece.x - 1, currentPiece.y)) {
+                currentPiece.x--;
+            }
+        }
+
+        function moveRight() {
+            if (!currentPiece || !gameRunning) return;
+            if (!checkCollision(currentPiece.shape, currentPiece.x + 1, currentPiece.y)) {
+                currentPiece.x++;
+            }
+        }
+
+        function rotatePiece(piece, direction) {
+            if (!piece || !gameRunning) return; // Oも回転試行可
+
+            const N = piece.shape.length;
+            const newShape = Array.from({ length: N }, () => Array(N).fill(0));
+            const color = piece.color;
+
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    if (piece.shape[r][c]) {
+                        if (direction === 'right') newShape[c][N - 1 - r] = color;
+                        else newShape[N - 1 - c][r] = color;
+                    }
+                }
+            }
+            
+            const currentOrientation = piece.orientation;
+            let kickSetIndex;
+            if (direction === 'right') {
+                if (currentOrientation === 0) kickSetIndex = 0;
+                else if (currentOrientation === 1) kickSetIndex = 2;
+                else if (currentOrientation === 2) kickSetIndex = 4;
+                else if (currentOrientation === 3) kickSetIndex = 6;
+            } else { // left
+                if (currentOrientation === 0) kickSetIndex = 7;
+                else if (currentOrientation === 1) kickSetIndex = 1;
+                else if (currentOrientation === 2) kickSetIndex = 3;
+                else if (currentOrientation === 3) kickSetIndex = 5;
+            }
+
+            const kicksToTry = (piece.name === 'I' ? WALL_KICK_DATA_I[kickSetIndex] : WALL_KICK_DATA_JLSTZ[kickSetIndex]);
+            const allKicks = [[0,0], ...kicksToTry];
+
+            for (const [kickX, kickY] of allKicks) {
+                if (!checkCollision(newShape, piece.x + kickX, piece.y - kickY)) { // SRS Y-axis is inverted
+                    piece.x += kickX;
+                    piece.y -= kickY;
+                    piece.shape = newShape;
+                    piece.orientation = (currentOrientation + (direction === 'right' ? 1 : 3)) % 4;
+                    return; 
+                }
+            
+            // --- 拡張キック（超自由回転入れ）---
+            // SRSで不可→広域検索（±5 横・最大+8 上）。
+            // ※Oミノも対象。TST等の深い回転入れを許容。
+            const __ext = [];
+            for (let up = 0; up <= 8; up++) {
+                for (let dx = -5; dx <= 5; dx++) {
+                    __ext.push([dx, up]);
+                }
+            }
+            for (const [DX, UP] of __ext) {
+                if (!checkCollision(newShape, piece.x + DX, piece.y - UP)) {
+                    piece.x += DX;
+                    piece.y -= UP;
+                    piece.shape = newShape;
+                    piece.orientation = (currentOrientation + (direction === 'right' ? 1 : 3)) % 4;
+                    return;
+                }
+            }
+
+        }
+        
+            // --- 拡張キック（包括探索）---
+            // dx:-6..6, dy:-8..2 をマンハッタン距離順に探索
+            const _cands = [];
+            for (let rad = 0; rad <= 12; rad++) {
+              for (let dx = -6; dx <= 6; dx++) {
+                for (let dy = -8; dy <= 2; dy++) {
+                  if (Math.abs(dx) + Math.abs(dy) === rad) _cands.push([dx, dy]);
+                }
+              }
+            }
+            for (const [DX, DY] of _cands) {
+              if (!checkCollision(newShape, piece.x + DX, piece.y + DY)) {
+                piece.x += DX;
+                piece.y += DY;
+                piece.shape = newShape;
+                piece.orientation = (currentOrientation + (direction === 'right' ? 1 : 3)) % 4;
+                return;
+              }
+            }
+        }
+
+
+        function hardDrop() {
+            if (!currentPiece || !gameRunning) return;
+            while (!checkCollision(currentPiece.shape, currentPiece.x, currentPiece.y + 1)) {
+                currentPiece.y++;
+            }
+            landPiece();
+        }
+
+        function holdPieceAction() {
+            if (!canHold || !gameRunning) return;
+
+            const temp = heldPiece;
+            heldPiece = currentPiece;
+            heldPiece.shape = heldPiece.originalShape;
+            
+            if (temp) {
+                currentPiece = temp;
+                currentPiece.x = Math.floor((COLS - currentPiece.shape[0].length) / 2);
+                const firstNonEmptyRowIndex = currentPiece.shape.findIndex(row => row.some(cell => cell > 0));
+                currentPiece.y = (firstNonEmptyRowIndex !== -1) ? -firstNonEmptyRowIndex : 0;
+                currentPiece.orientation = 0;
+            } else {
+                spawnNewPiece();
+            }
+            
+            canHold = false;
+        }
+
+        function checkCollision(shape, offsetX, offsetY) {
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c] > 0) { 
+                        const boardX = offsetX + c;
+                        const boardY = offsetY + r;
+                        if (boardX < 0 || boardX >= COLS || boardY >= ROWS || (boardY >= 0 && board[boardY] && board[boardY][boardX] > 0)) {
+                            return true; 
+                        }
+                    }
+                }
+            }
+            return false; 
+        }
+
+        function landPiece() {
+            if (!currentPiece || !gameRunning) return; 
+            
+            let isGameOver = false;
+            currentPiece.shape.forEach((row, r) => {
+                row.forEach((cell, c) => {
+                    if (cell > 0) {
+                        const boardX = currentPiece.x + c;
+                        const boardY = currentPiece.y + r;
+                        if (boardY >= 0) {
+                           board[boardY][boardX] = currentPiece.color;
+                        } else {
+                           isGameOver = true;
+                        }
+                    }
+                });
+            });
+
+            if(isGameOver) {
+                endGame(false);
+                return;
+            }
+
+            totalPiecesPlaced++;
+            clearLines(); 
+            if (gameOver) return; 
+            spawnNewPiece();
+        }
+
+        function clearLines() {
+            let linesRemovedThisTurn = 0;
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (board[y].every(cell => cell > 0)) {
+                    linesRemovedThisTurn++;
+                    board.splice(y, 1); 
+                    board.unshift(Array(COLS).fill(0)); 
+                    y++; 
+                }
+            }
+
+            if (linesRemovedThisTurn > 0) {
+                linesCleared += linesRemovedThisTurn;
+                if (linesCleared >= TARGET_LINES) { 
+                    endGame(true); 
+                }
+            }
+        }
+
+        function endGame(won) {
+            if (gameOver) return;
+            gameRunning = false;
+            gameOver = true;
+            clearInterval(gameLoopInterval);
+            if (!isReplaying) {
+                lastReplay = {
+                    inputs: [...replayInputs],
+                    pieceSequence: [...pieceSequence]
+                };
+            }
+            showOverlay('gameover', { won, finalTime: timeDisplayEl.textContent, linesCleared });
+        }
+        
+        function processInput(action) {
+            if (isReplaying) return;
+            replayInputs.push({ frame: frameCount, action });
+            totalInputs++;
+            handleAction(action);
+        }
+
+        function handleAction(action) {
+             switch (action) {
+                case 'moveLeft': moveLeft(); break;
+                case 'moveRight': moveRight(); break;
+                case 'softDrop': if(!checkCollision(currentPiece.shape, currentPiece.x, currentPiece.y + 1)) currentPiece.y++; break;
+                case 'rotateRight': rotatePiece(currentPiece, 'right'); break;
+                case 'rotateLeft': rotatePiece(currentPiece, 'left'); break;
+                case 'hardDrop': hardDrop(); break;
+                case 'hold': holdPieceAction(); break;
+                case 'restart': startGame(false); break;
+            }
+        }
+
+        // --- Input Handling ---
+        function handleKeyPress(e) {
+            if (e.repeat || isReplaying) return;
+            
+            if (gameOver) {
+                if (e.code === 'Space') { e.preventDefault(); showOverlay('settings'); }
+                return;
+            }
+            if (!gameRunning) return;
+
+            switch (e.code) {
+                case 'ArrowLeft': inputState.left = true; break;
+                case 'ArrowRight': inputState.right = true; break;
+                case 'ArrowDown': inputState.down = true; break;
+                case 'ArrowUp': processInput('rotateRight'); break;
+                case 'ControlLeft': case 'ControlRight': case 'KeyZ': processInput('rotateLeft'); break;
+                case 'KeyW': processInput('hardDrop'); break;
+                case 'KeyE': processInput('hold'); break;
+                case 'Space': processInput('restart'); break;
+            }
+        }
+
+        function handleKeyRelease(e) {
+            if (isReplaying) return;
+            switch (e.code) {
+                case 'ArrowLeft': inputState.left = false; break;
+                case 'ArrowRight': inputState.right = false; break;
+                case 'ArrowDown': inputState.down = false; break;
+            }
+        }
+
+        // --- Game Loop ---
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            frameCount++;
+
+            // Handle Replay Inputs
+            if (isReplaying) {
+                while(replayInputIndex < lastReplay.inputs.length && lastReplay.inputs[replayInputIndex].frame === frameCount) {
+                    handleAction(lastReplay.inputs[replayInputIndex].action);
+                    replayInputIndex++;
+                }
+            }
+
+            // Handle DAS/ARR
+            const currentHorizontalInput = (inputState.right ? 1 : 0) + (inputState.left ? -1 : 0);
+            if (currentHorizontalInput !== 0 && currentHorizontalInput !== moveDirection) {
+                const delayMultiplier = (moveDirection !== 0) ? 2 : 1;
+                moveDirection = currentHorizontalInput;
+                dasCounter = dasFrame * delayMultiplier;
+                arrCounter = 0;
+                if (moveDirection === 1) processInput('moveRight');
+                else processInput('moveLeft');
+            } else if (currentHorizontalInput === 0) {
+                moveDirection = 0;
+            } else { // continue holding
+                if (dasCounter > 0) {
+                    dasCounter--;
+                } else {
+                    arrCounter++;
+                    if (arrCounter >= arrFrame) {
+                        if (moveDirection === 1) processInput('moveRight');
+                        else processInput('moveLeft');
+                        arrCounter = 0;
+                    }
+                }
+            }
+
+
+            // Handle Gravity
+            if (inputState.down) {
+                processInput('softDrop');
+            } else {
+                 if (frameCount % FPS === 0) { // 1G gravity
+                    moveDown();
+                 }
+            }
+            
+            updateStatsDisplay();
+            drawAll();
+        }
+    </script>
+</body>
+</html>
