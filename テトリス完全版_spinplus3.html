@@ -730,57 +730,46 @@
             }
 
             const kicksToTry = (piece.name === 'I' ? WALL_KICK_DATA_I[kickSetIndex] : WALL_KICK_DATA_JLSTZ[kickSetIndex]);
-            const allKicks = [[0,0], ...kicksToTry];
-
-            for (const [kickX, kickY] of allKicks) {
-                if (!checkCollision(newShape, piece.x + kickX, piece.y - kickY)) { // SRS Y-axis is inverted
-                    piece.x += kickX;
-                    piece.y -= kickY;
-                    piece.shape = newShape;
-                    piece.orientation = (currentOrientation + (direction === 'right' ? 1 : 3)) % 4;
-                    return; 
+            const attemptRotation = (offsets, invertY = false) => {
+                for (const [dx, dy] of offsets) {
+                    const targetX = piece.x + dx;
+                    const targetY = piece.y + (invertY ? -dy : dy);
+                    if (!checkCollision(newShape, targetX, targetY)) {
+                        piece.x = targetX;
+                        piece.y = targetY;
+                        piece.shape = newShape;
+                        piece.orientation = (currentOrientation + (direction === 'right' ? 1 : 3)) % 4;
+                        return true;
+                    }
                 }
-            
+                return false;
+            };
+
+            const standardKicks = [[0, 0], ...kicksToTry];
+            if (attemptRotation(standardKicks, true)) return;
+
             // --- 拡張キック（超自由回転入れ）---
             // SRSで不可→広域検索（±5 横・最大+8 上）。
             // ※Oミノも対象。TST等の深い回転入れを許容。
-            const __ext = [];
+            const extendedKicks = [];
             for (let up = 0; up <= 8; up++) {
                 for (let dx = -5; dx <= 5; dx++) {
-                    __ext.push([dx, up]);
+                    extendedKicks.push([dx, up]);
                 }
             }
-            for (const [DX, UP] of __ext) {
-                if (!checkCollision(newShape, piece.x + DX, piece.y - UP)) {
-                    piece.x += DX;
-                    piece.y -= UP;
-                    piece.shape = newShape;
-                    piece.orientation = (currentOrientation + (direction === 'right' ? 1 : 3)) % 4;
-                    return;
-                }
-            }
+            if (attemptRotation(extendedKicks, true)) return;
 
-        }
-        
             // --- 拡張キック（包括探索）---
             // dx:-6..6, dy:-8..2 をマンハッタン距離順に探索
-            const _cands = [];
+            const exhaustiveKicks = [];
             for (let rad = 0; rad <= 12; rad++) {
-              for (let dx = -6; dx <= 6; dx++) {
-                for (let dy = -8; dy <= 2; dy++) {
-                  if (Math.abs(dx) + Math.abs(dy) === rad) _cands.push([dx, dy]);
+                for (let dx = -6; dx <= 6; dx++) {
+                    for (let dy = -8; dy <= 2; dy++) {
+                        if (Math.abs(dx) + Math.abs(dy) === rad) exhaustiveKicks.push([dx, dy]);
+                    }
                 }
-              }
             }
-            for (const [DX, DY] of _cands) {
-              if (!checkCollision(newShape, piece.x + DX, piece.y + DY)) {
-                piece.x += DX;
-                piece.y += DY;
-                piece.shape = newShape;
-                piece.orientation = (currentOrientation + (direction === 'right' ? 1 : 3)) % 4;
-                return;
-              }
-            }
+            attemptRotation(exhaustiveKicks);
         }
 
 
